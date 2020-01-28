@@ -1,10 +1,10 @@
 {
-  "Name": "<your project name>",
-  "Author": "<your name>",
+  "Name": "RL Agent for Fishing",
+  "Author": "Thiago Lira",
   "Version": "1.0.0",
-  "Description": "<One or two sentences about the mod>",
-  "UniqueID": "<your name>.<your project name>",
-  "EntryDll": "<your project name>.dll",
+  "Description": "Fancy RL agent for perfect fishing",
+  "UniqueID": "thlira.fishinrl",
+  "EntryDll": "fishing-sv-rl.dll",
   "MinimumApiVersion": "2.10.0",
   "UpdateKeys": []
 }
