@@ -1,5 +1,7 @@
 ﻿using System;
 using Microsoft.Xna.Framework;
+using DsStardewLib.SMAPI;
+using DsStardewLib.Utils;
 using StardewModdingAPI;
 using StardewValley.Menus;
 using StardewValley.Tools;
@@ -7,16 +9,26 @@ using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
 using StardewValley;
 
+using fishing.HarmonyHacks;
+
+
+
+
 namespace fishing
 {
-
-
-
-
 
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
+
+
+
+        private DsModHelper<ModConfig> modHelper = new DsModHelper<ModConfig>();
+        private HarmonyWrapper hWrapper = new HarmonyWrapper();
+
+
+        private Logger log;
+        private ModConfig config;
 
         /*********
         ** Public methods
@@ -54,12 +66,24 @@ namespace fishing
 
 
 
-   
         /// <summary>The mod entry point, called after the mod is first loaded.</summary>
         /// <param name="helper">Provides simplified APIs for writing mods.</param>
         public override void Entry(IModHelper helper)
         {
-            helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+
+                modHelper.Init(helper, this.Monitor);
+                log = modHelper.Log;
+                config = modHelper.Config;
+
+                log.Silly("Created log and config for mod entry.  Loading Harmony.");
+                hWrapper.InitHarmony(helper, config, log);
+
+                log.Silly("Loading event handlers");
+
+                helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+                helper.Events.Player.InventoryChanged += OnInventoryChanged;
+                helper.Events.Display.MenuChanged += OnMenuChanged;
+
         }
 
 
@@ -80,13 +104,23 @@ namespace fishing
 
             if (args.NewMenu is BobberBar bar)
             {
-                
                 // No treasures to mess with training!
                 Helper.Reflection.GetField<bool>(bar, "treasure").SetValue(false);
-                
-
-
             }
+
+ 
+        }
+
+        private void OnInventoryChanged(object sender, InventoryChangedEventArgs args)
+        {
+            Farmer player = args.Player;
+
+            foreach (Item item in args.Added)
+            {
+                player.Items.Remove(item);
+            }
+            
+
         }
 
 
@@ -142,6 +176,23 @@ namespace fishing
 
                 this.Monitor.Log($"{Game1.player.Name} fishing state: {bobberBarPos},{bobberBarHeight}.", LogLevel.Debug);
             }
+
+            // Click away the catched fish.  The conditionals are ordered here in a way
+            // the check for the popup happens before the config check so the code can
+            // always check the treasure chest.  See the variable doneCaughtFish for more
+            // info.
+            if (ShouldDoDismissCaughtPopup(rod))
+            {
+                log.Trace("Tool is sitting at caught fish popup");
+                //doneCaughtFish = true;
+
+
+                log.Trace("Closing popup with Harmony");
+                ClickAtAllHack.simulateClick = true;
+                
+            }
+
+
         }
 
 
