@@ -10,8 +10,7 @@ using StardewModdingAPI.Utilities;
 using StardewValley;
 
 using fishing.HarmonyHacks;
-
-
+using Microsoft.ML;
 
 
 namespace fishing
@@ -20,6 +19,25 @@ namespace fishing
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
+
+
+        /*
+        float bobberBarPosMax = -10000;
+        float bobberBarPosMin = 10000;
+
+        int bobberBarHeightMax = -10000;
+        int bobberBarHeightMin = 100000;
+
+
+        float bobberBarSpeedMax = -10000;
+        float bobberBarSpeedMin = 100000;
+
+        float bobberPositionMax = -10000;
+        float bobberPositionMin = 100000;
+        */
+
+
+       
 
 
 
@@ -64,15 +82,23 @@ namespace fishing
 
         public bool autoCastRod = true;
 
-
+        private RLAgent Agent;
 
         /// <summary>The mod entry point, called after the mod is first loaded.</summary>
         /// <param name="helper">Provides simplified APIs for writing mods.</param>
         public override void Entry(IModHelper helper)
         {
 
+
+
                 modHelper.Init(helper, this.Monitor);
+
+
                 log = modHelper.Log;
+
+
+                Agent = new RLAgent(log);
+
                 config = modHelper.Config;
 
                 log.Silly("Created log and config for mod entry.  Loading Harmony.");
@@ -166,15 +192,53 @@ namespace fishing
 
             if (Game1.activeClickableMenu is BobberBar bar)
             {
+
+                // this is the bar, the lower end 
                 float bobberBarPos = Helper.Reflection.GetField<float>(bar, "bobberBarPos").GetValue();
+
+                // size of fishing bar
                 int bobberBarHeight = Helper.Reflection.GetField<int>(bar, "bobberBarHeight").GetValue();
+
+                // velocity of bar
                 float bobberBarSpeed =  Helper.Reflection.GetField<float>(bar, "bobberBarSpeed").GetValue();
+
+                // this is the fish 
                 float bobberPosition = Helper.Reflection.GetField<float>(bar, "bobberPosition").GetValue();
+
 
                 // this can be used to calculate the reward each tick
                 float distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
 
-                this.Monitor.Log($"{Game1.player.Name} fishing state: {bobberBarPos},{bobberBarHeight}.", LogLevel.Debug);
+
+
+                float[] state = { bobberBarPos, bobberBarSpeed, bobberPosition };
+
+                Agent.Update(state);
+
+
+
+                /*
+                if (bobberBarPos > bobberBarPosMax) { bobberBarPosMax = bobberBarPos; }
+                if (bobberBarPos < bobberBarPosMin) { bobberBarPosMin = bobberBarPos; }
+
+                if (bobberBarHeight > bobberBarHeightMax) { bobberBarHeightMax = bobberBarHeight; }
+                if (bobberBarHeight < bobberBarHeightMin) { bobberBarHeightMin = bobberBarHeight; }
+
+                if (bobberBarSpeed > bobberBarSpeedMax) { bobberBarSpeedMax = bobberBarSpeed; }
+                if (bobberBarSpeed < bobberBarSpeedMin) { bobberBarSpeedMin = bobberBarSpeed; }
+
+                if (bobberPosition > bobberPositionMax) { bobberPositionMax = bobberPosition; }
+                if (bobberPosition < bobberPositionMin) { bobberPositionMin = bobberPosition; }
+
+                this.Monitor.Log($"bobberbarpos MAX: {bobberBarPosMax} , MIN: {bobberBarPosMin}", LogLevel.Debug);
+                this.Monitor.Log($"bobberBarHeight MAX: {bobberBarHeightMax} , MIN: {bobberBarHeightMin}", LogLevel.Debug);
+                this.Monitor.Log($"bobberBarSpeed MAX: {bobberBarSpeedMax} , MIN: {bobberBarSpeedMin}", LogLevel.Debug);
+                this.Monitor.Log($"bobberPosition MAX: {bobberPositionMax} , MIN: {bobberPositionMin}", LogLevel.Debug);
+                */
+
+
+
+
             }
 
             // Click away the catched fish.  The conditionals are ordered here in a way
