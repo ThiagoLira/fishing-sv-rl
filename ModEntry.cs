@@ -92,10 +92,6 @@ namespace fishing
 
             Agent = this.Helper.Data.ReadJsonFile<RLAgent>("RlAgent.json") ?? new RLAgent(log);
 
-            if (Agent == null)
-            {
-                Agent = new RLAgent(log);
-            }
 
             config = modHelper.Config;
 
@@ -129,14 +125,28 @@ namespace fishing
             if (args.NewMenu is BobberBar bar)
             {
 
+                // save model so far
+                this.Helper.Data.WriteJsonFile("RLmodel.json", Agent);
+
+                CountFishes++;
+
                 IsFishing = true;
 
                 // No treasures to mess with training!
                 Helper.Reflection.GetField<bool>(bar, "treasure").SetValue(false);
+
+
+
             }
 
-
-
+            if (args.NewMenu is ItemGrabMenu menu)
+            {
+                // JUST... JUST LEAVE ME BE
+                menu.exitThisMenu();
+                
+            }
+           
+           
 
 
         }
@@ -207,9 +217,6 @@ namespace fishing
                 log.Trace("Tool is sitting at caught fish popup");
 
 
-                CountFishes++;
-
-                this.Helper.Data.WriteJsonFile("RLmodel.json", Agent);
 
                 log.Trace("Closing popup with Harmony");
                 ClickAtAllHack.simulateClick = true;

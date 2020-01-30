@@ -4,7 +4,7 @@ using NumSharp;
 
 public class SaveData
 {
-    public NDarray QTable { get; set; } 
+    public double[][][][] QTable { get; set; } 
 
     public SaveData()
     {
