@@ -7,10 +7,13 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Tools;
+using Newtonsoft.Json;
+using System;
 
 namespace fishing
 {
 
+    
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
@@ -90,8 +93,16 @@ namespace fishing
             log = modHelper.Log;
 
 
-            Agent = this.Helper.Data.ReadJsonFile<RLAgent>("RlAgent.json") ?? new RLAgent(log);
+            Agent = new RLAgent(log);
 
+            try
+            {
+                Agent.ReadQTableFromJson();
+            }
+            catch (Exception e)
+            {
+                log.Log(e.Message);
+            }
 
             config = modHelper.Config;
 
@@ -127,6 +138,9 @@ namespace fishing
 
                 // save model so far
                 this.Helper.Data.WriteJsonFile("RLmodel.json", Agent);
+
+                log.Log("Dumping QTable");
+                Agent.DumpQTableJson();
 
                 CountFishes++;
 
@@ -254,6 +268,11 @@ namespace fishing
                     if(best_action == 1 )
                     {
                         IsButtonDownHack.simulateDown = true;
+                    }
+                    else
+                    {
+                        IsButtonDownHack.simulateDown = false;
+
                     }
 
 

@@ -1,7 +1,9 @@
 ﻿using System;
+using System.IO;
 using DsStardewLib.Utils;
 
 
+using Newtonsoft.Json;
 
 using NumSharp;
 
@@ -46,6 +48,49 @@ namespace fishing
 
         private Logger Log;
 
+
+        public void ReadQTableFromJson()
+        {
+            using (StreamReader r = new StreamReader("QTable.json"))
+            {
+                string json = r.ReadToEnd();
+
+                double[,,,] temp = JsonConvert.DeserializeObject<double[,,,] >(json);
+
+
+
+                try
+                {
+                    this.QTable = NDArray.FromMultiDimArray<double>(temp);
+
+                    this.QTable.reshape(new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
+                                                    1+ Convert.ToInt32((double) nBuckets[1]),
+                                                    1+ Convert.ToInt32((double) nBuckets[2]),
+                                                    nActions });
+
+                    Log.Log("Successfuly loaded QTable from json");
+
+                }
+                catch (Exception e)
+                {
+                    Log.Log("WARNING Mismatch on QTable size stored on Json");
+                }
+
+            }
+
+
+        }
+        public void DumpQTableJson()
+        {
+            string json = JsonConvert.SerializeObject(this.QTable.ToMuliDimArray<double>());
+
+            System.IO.File.WriteAllText(@"QTable.json", json);
+
+
+        }
+
+
+
         public int[] DiscretizeState(double[] state)
         {
 
@@ -84,6 +129,7 @@ namespace fishing
                                                           nActions });
 
 
+            
             Log = log;
 
 
@@ -96,7 +142,10 @@ namespace fishing
             int BestAction;
 
             // DistanceFromCatch
-            int reward = (int)(double)OldState[3];
+            double reward = (double)OldState[3] ;
+            double new_reward = (double)NewState[3]  ;
+
+
 
             int[] DOldState = DiscretizeState(OldState);
             int[] DNewState = DiscretizeState(NewState);
@@ -108,9 +157,7 @@ namespace fishing
 
 
                 QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] = QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] + 
-                                    LearningRate* ( reward  
-                                    + Discount * np.max(QTable[DNewState[0], DNewState[1], DNewState[2]]) 
-                                    - QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction]);
+                                    LearningRate * ( reward + Discount * np.max(QTable[DNewState[0], DNewState[1], DNewState[2]]) - QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction]);
 
 
 
@@ -134,7 +181,8 @@ namespace fishing
               $"{DNewState[1]} \n" +
               $"{DNewState[2]} \n" +
               $"Action1 {QTable[DOldState[0], DOldState[1], DOldState[2]][0] }\n" +
-              $"Action2 {QTable[DOldState[0], DOldState[1], DOldState[2]][1] }\n"
+              $"Action2 {QTable[DOldState[0], DOldState[1], DOldState[2]][1] }\n" +
+              $"Reward: {reward}\n"
               );
 
 
