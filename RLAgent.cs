@@ -1,10 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.ML;
-using StardewModdingAPI;
 using DsStardewLib.Utils;
 
 
@@ -19,49 +13,51 @@ namespace fishing
     class RLAgent
 
     {
-        //bobberbarpos MAX: 432 , MIN: 0
-
-        //bobberBarSpeed MAX: 16.8 , MIN: -17.66666
-
-        //bobberPosition MAX: 508 , MIN: 339.0656
 
         // ALWAYS ON THIS ORDER
-        public const float bobberBarPosMax = 432;
-        public const float bobberBarPosMin = 0;
+        public const double bobberBarPosMax = 432;
+        public const double bobberBarPosMin = 0;
 
-        public const float bobberBarSpeedMax = 16.8F;
-        public const float bobberBarSpeedMin = -17.66F;
+        public const double bobberBarSpeedMax = 16.8;
+        public const double bobberBarSpeedMin = -16.8;
 
-        public const float bobberPositionMax = 508;
-        public const float bobberPositionMin = 339.0656F;
+        public const double bobberPositionMax = 508.0000;
+        public const double bobberPositionMin = 0;
 
         // for discretization purposes
         // https://pythonprogramming.net/q-learning-reinforcement-learning-python-tutorial/
 
 
         // first 3 entries are number of discrete values to be taken by each variable on a state
-        // last entry is the number of actions! to click or not to click
-        public NDArray nDims = new float [] { 20, 20, 20 , 2 };
+        public NDArray nBuckets = np.array(new double[] { 20, 20, 20 });
 
-        public NDArray DiscreteSteps = new float[3];
+        // the AI can CLICK or NOT CLICK
+        public int nActions = 2;
 
-        public int[][] QTable;
+        public NDArray DiscreteStep = new double[3];
+
+        public NDArray QTable;
+
+
+        // Q-learning settings
+        private float LearningRate = 0.1F;
+        private float Discount = 0.95F;
+        private int NumEpisodes = 25000;
 
         private Logger Log;
 
-        public int [] DiscretizeState(float[] state)
+        public int[] DiscretizeState(double[] state)
         {
 
-            int[] temp = { 0, 0, 0 };
+            int[] temp = new int[3];
 
 
-            temp[0] = state[0] - bobberBarPosMin / DiscreteSteps[0];
-            temp[1] = state[1] - bobberBarSpeedMin / DiscreteSteps[1];
-            temp[2] = state[2] - bobberPositionMin / DiscreteSteps[2];
+            temp[0] = (int)Math.Floor((double)((state[0] - bobberBarPosMin) / DiscreteStep[0]));
+            temp[1] = (int)Math.Floor((double)((state[1] - bobberBarSpeedMin) / DiscreteStep[1]));
+            temp[2] = (int)Math.Floor((double)((state[2] - bobberPositionMin) / DiscreteStep[2]));
 
 
             return temp;
-
 
 
         }
@@ -73,34 +69,78 @@ namespace fishing
 
 
 
+            // calculate the increment on each discretized feature 
+            // this is then used to create "buckets" on the Q-table for each possible state
+            DiscreteStep[0] = (bobberBarPosMax - bobberBarPosMin) / nBuckets[0];
+            DiscreteStep[1] = (bobberBarSpeedMax - bobberBarSpeedMin) / nBuckets[1];
+            DiscreteStep[2] = (bobberPositionMax - bobberPositionMin) / nBuckets[2];
 
-            DiscreteSteps[0] = (bobberBarPosMax - bobberBarPosMin) / nDims[0];
-            DiscreteSteps[1] = (bobberBarSpeedMax + bobberBarSpeedMin) / nDims[1];
-            DiscreteSteps[2] = (bobberPositionMax - bobberPositionMin) / nDims[2];
 
-
-
-            //NDArray q_table = np.random.uniform( -2,  0, nDims);
-
+            // initialize Q-table
+            // one more position since the last bucket is indexed by the arraysize instead of arraysize -1 
+            QTable = np.random.uniform(-2, 0, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
+                                                          1+ Convert.ToInt32((double) nBuckets[1]),
+                                                          1+ Convert.ToInt32((double) nBuckets[2]),
+                                                          nActions });
 
 
             Log = log;
 
-        }
-        
 
-        public int Update(float[] state) 
+        }
+
+
+        public int Update(double[] OldState, double[] NewState)
         {
 
-            int[] d_state = DiscretizeState(state);
+            int BestAction;
+
+            // DistanceFromCatch
+            int reward = (int)(double)OldState[3];
+
+            int[] DOldState = DiscretizeState(OldState);
+            int[] DNewState = DiscretizeState(NewState);
+
+            try
+            {
+                // array with q values for 2 possible actions
+                BestAction = np.argmax(QTable[DOldState[0], DOldState[1], DOldState[2]]);
 
 
-            Log.Log($"New State: " +
-                $"{d_state[0]}" +
-                $"{d_state[1]}" +
-                $"{d_state[2]}");
+                QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] = QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] + 
+                                    LearningRate* ( reward  
+                                    + Discount * np.max(QTable[DNewState[0], DNewState[1], DNewState[2]]) 
+                                    - QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction]);
 
-            return 0;
+
+
+            }
+            catch (Exception e)
+            {
+                Log.Log($"Qtable shape: {QTable.shape[0]}");
+                Log.Log($"Qtable shape1: {QTable.shape[1]}");
+                Log.Log($"Qtable shape2: {QTable.shape[2]}");
+                Log.Log(e.Message);
+                Log.Log($"New State: \n " +
+                  $"{DOldState[0]} \n" +
+                  $"{DOldState[1]} \n" +
+                  $"{DOldState[2]} \n");
+
+                return 0;
+            }
+
+            Log.Log($"New State: \n " +
+              $"{DNewState[0]} \n" +
+              $"{DNewState[1]} \n" +
+              $"{DNewState[2]} \n" +
+              $"Action1 {QTable[DOldState[0], DOldState[1], DOldState[2]][0] }\n" +
+              $"Action2 {QTable[DOldState[0], DOldState[1], DOldState[2]][1] }\n"
+              );
+
+
+
+
+            return BestAction;
         }
 
 

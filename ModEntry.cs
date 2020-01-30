@@ -1,17 +1,12 @@
-﻿using System;
-using Microsoft.Xna.Framework;
-using DsStardewLib.SMAPI;
+﻿using DsStardewLib.SMAPI;
 using DsStardewLib.Utils;
+using fishing.HarmonyHacks;
+using NumSharp;
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
+using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Tools;
-using StardewModdingAPI.Events;
-using StardewModdingAPI.Utilities;
-using StardewValley;
-
-using fishing.HarmonyHacks;
-using Microsoft.ML;
-
 
 namespace fishing
 {
@@ -21,32 +16,30 @@ namespace fishing
     {
 
 
-        /*
-        float bobberBarPosMax = -10000;
-        float bobberBarPosMin = 10000;
-
-        int bobberBarHeightMax = -10000;
-        int bobberBarHeightMin = 100000;
-
-
-        float bobberBarSpeedMax = -10000;
-        float bobberBarSpeedMin = 100000;
-
-        float bobberPositionMax = -10000;
-        float bobberPositionMin = 100000;
-        */
-
-
-       
-
-
-
         private DsModHelper<ModConfig> modHelper = new DsModHelper<ModConfig>();
         private HarmonyWrapper hWrapper = new HarmonyWrapper();
 
 
         private Logger log;
         private ModConfig config;
+
+
+        private int CountFishes = 0;
+        private bool IsFishing = false;
+
+        // INITIALIZE STATE
+
+        // this is the bar, the lower end 
+        float bobberBarPos = 0;
+        // velocity of bar
+        float bobberBarSpeed = 0;
+        // this is the fish 
+        float bobberPosition = 15;
+        // reward
+        // from 0 to 1
+        float distanceFromCatching = 0;
+
+
 
         /*********
         ** Public methods
@@ -91,24 +84,29 @@ namespace fishing
 
 
 
-                modHelper.Init(helper, this.Monitor);
+            modHelper.Init(helper, this.Monitor);
 
 
-                log = modHelper.Log;
+            log = modHelper.Log;
 
 
+            Agent = this.Helper.Data.ReadJsonFile<RLAgent>("RlAgent.json") ?? new RLAgent(log);
+
+            if (Agent == null)
+            {
                 Agent = new RLAgent(log);
+            }
 
-                config = modHelper.Config;
+            config = modHelper.Config;
 
-                log.Silly("Created log and config for mod entry.  Loading Harmony.");
-                hWrapper.InitHarmony(helper, config, log);
+            log.Silly("Created log and config for mod entry.  Loading Harmony.");
+            hWrapper.InitHarmony(helper, config, log);
 
-                log.Silly("Loading event handlers");
+            log.Silly("Loading event handlers");
 
-                helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
-                helper.Events.Player.InventoryChanged += OnInventoryChanged;
-                helper.Events.Display.MenuChanged += OnMenuChanged;
+            helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+            helper.Events.Player.InventoryChanged += OnInventoryChanged;
+            helper.Events.Display.MenuChanged += OnMenuChanged;
 
         }
 
@@ -130,11 +128,17 @@ namespace fishing
 
             if (args.NewMenu is BobberBar bar)
             {
+
+                IsFishing = true;
+
                 // No treasures to mess with training!
                 Helper.Reflection.GetField<bool>(bar, "treasure").SetValue(false);
             }
 
- 
+
+
+
+
         }
 
         private void OnInventoryChanged(object sender, InventoryChangedEventArgs args)
@@ -145,100 +149,53 @@ namespace fishing
             {
                 player.Items.Remove(item);
             }
-            
+
 
         }
 
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs args)
         {
+
+
             Farmer player = Game1.player;
 
 
+            // freeze time
+            Game1.gameTimeInterval = 0;
+
+            // infinite stamina
+            player.stamina = player.MaxStamina;
+
+            if (player == null || !player.IsLocalPlayer)
+                return;
             if (!(Game1.player.CurrentTool is FishingRod))
                 return;
+
 
 
             FishingRod rod = Game1.player.CurrentTool as FishingRod;
 
 
-            if (player == null || !player.IsLocalPlayer)
+
+            if (autoCastRod & ShouldDoAutoCast(rod))
             {
-                return;
-            }
-
-
-
-
-            if( autoCastRod & ShouldDoAutoCast(rod) )
-            {
-               rod.beginUsing(Game1.currentLocation,
-                                Game1.player.getStandingX(),
-                                Game1.player.getStandingY(),
-                                Game1.player);
+                rod.beginUsing(Game1.currentLocation,
+                                 Game1.player.getStandingX(),
+                                 Game1.player.getStandingY(),
+                                 Game1.player);
             }
 
             if (!rod.isNibbling && rod.isFishing && !rod.isReeling && !rod.pullingOutOfWater && !rod.hit)
             {
                 rod.timeUntilFishingBite = 0;
+                rod.castingTimerSpeed = 0;
+                rod.castingPower = 1;
             }
 
             if (rod.isNibbling && rod.isFishing && !rod.isReeling && !rod.pullingOutOfWater && !rod.hit)
             {
                 Farmer.useTool(player);
-            }
-
-        
-
-            if (Game1.activeClickableMenu is BobberBar bar)
-            {
-
-                // this is the bar, the lower end 
-                float bobberBarPos = Helper.Reflection.GetField<float>(bar, "bobberBarPos").GetValue();
-
-                // size of fishing bar
-                int bobberBarHeight = Helper.Reflection.GetField<int>(bar, "bobberBarHeight").GetValue();
-
-                // velocity of bar
-                float bobberBarSpeed =  Helper.Reflection.GetField<float>(bar, "bobberBarSpeed").GetValue();
-
-                // this is the fish 
-                float bobberPosition = Helper.Reflection.GetField<float>(bar, "bobberPosition").GetValue();
-
-
-                // this can be used to calculate the reward each tick
-                float distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
-
-
-
-                float[] state = { bobberBarPos, bobberBarSpeed, bobberPosition };
-
-                Agent.Update(state);
-
-
-
-                /*
-                if (bobberBarPos > bobberBarPosMax) { bobberBarPosMax = bobberBarPos; }
-                if (bobberBarPos < bobberBarPosMin) { bobberBarPosMin = bobberBarPos; }
-
-                if (bobberBarHeight > bobberBarHeightMax) { bobberBarHeightMax = bobberBarHeight; }
-                if (bobberBarHeight < bobberBarHeightMin) { bobberBarHeightMin = bobberBarHeight; }
-
-                if (bobberBarSpeed > bobberBarSpeedMax) { bobberBarSpeedMax = bobberBarSpeed; }
-                if (bobberBarSpeed < bobberBarSpeedMin) { bobberBarSpeedMin = bobberBarSpeed; }
-
-                if (bobberPosition > bobberPositionMax) { bobberPositionMax = bobberPosition; }
-                if (bobberPosition < bobberPositionMin) { bobberPositionMin = bobberPosition; }
-
-                this.Monitor.Log($"bobberbarpos MAX: {bobberBarPosMax} , MIN: {bobberBarPosMin}", LogLevel.Debug);
-                this.Monitor.Log($"bobberBarHeight MAX: {bobberBarHeightMax} , MIN: {bobberBarHeightMin}", LogLevel.Debug);
-                this.Monitor.Log($"bobberBarSpeed MAX: {bobberBarSpeedMax} , MIN: {bobberBarSpeedMin}", LogLevel.Debug);
-                this.Monitor.Log($"bobberPosition MAX: {bobberPositionMax} , MIN: {bobberPositionMin}", LogLevel.Debug);
-                */
-
-
-
-
             }
 
             // Click away the catched fish.  The conditionals are ordered here in a way
@@ -248,15 +205,56 @@ namespace fishing
             if (ShouldDoDismissCaughtPopup(rod))
             {
                 log.Trace("Tool is sitting at caught fish popup");
-                //doneCaughtFish = true;
 
+
+                CountFishes++;
+
+                this.Helper.Data.WriteJsonFile("RLmodel.json", Agent);
 
                 log.Trace("Closing popup with Harmony");
                 ClickAtAllHack.simulateClick = true;
-                
+
             }
 
+         
 
+            // 2x per second
+            if (args.IsMultipleOf(30))
+            {
+
+
+                    if (Game1.activeClickableMenu is BobberBar bar)
+                {
+
+
+                    int  best_action;
+
+                    double[] old_state = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+
+                    // Update State
+                    bobberBarPos = Helper.Reflection.GetField<float>(bar, "bobberBarPos").GetValue();
+                    bobberBarSpeed = Helper.Reflection.GetField<float>(bar, "bobberBarSpeed").GetValue();
+                    bobberPosition = Helper.Reflection.GetField<float>(bar, "bobberPosition").GetValue();
+                    distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
+
+
+                    double [] new_state = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+
+
+                    best_action = (int) Agent.Update(old_state,new_state);
+
+                    // execute action if needed
+                    if(best_action == 1 )
+                    {
+                        IsButtonDownHack.simulateDown = true;
+                    }
+
+
+                }
+
+
+            }
+       
         }
 
 
