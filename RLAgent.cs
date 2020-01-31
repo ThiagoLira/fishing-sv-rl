@@ -142,7 +142,9 @@ namespace fishing
             int BestAction;
 
             // DistanceFromCatch
-            double reward = (double)NewState[3] ;
+            // the closer the agent is better the reward
+            // this way we don't have many local minima
+            double reward = (double) Math.Pow(100,NewState[3]) ;
 
 
 
