@@ -123,7 +123,7 @@ namespace fishing
 
             // initialize Q-table
             // one more position since the last bucket is indexed by the arraysize instead of arraysize -1 
-            QTable = np.random.uniform(-2, 0, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
+            QTable = np.random.uniform(0, .05, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
                                                           1+ Convert.ToInt32((double) nBuckets[1]),
                                                           1+ Convert.ToInt32((double) nBuckets[2]),
                                                           nActions });
@@ -142,8 +142,7 @@ namespace fishing
             int BestAction;
 
             // DistanceFromCatch
-            double reward = (double)OldState[3] ;
-            double new_reward = (double)NewState[3]  ;
+            double reward = (double)NewState[3] ;
 
 
 
@@ -154,6 +153,8 @@ namespace fishing
             {
                 // array with q values for 2 possible actions
                 BestAction = np.argmax(QTable[DOldState[0], DOldState[1], DOldState[2]]);
+
+                
 
 
                 QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] = QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] + 
