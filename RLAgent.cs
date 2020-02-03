@@ -2,7 +2,7 @@
 using System.IO;
 using DsStardewLib.Utils;
 
-
+using System.Collections;
 using Newtonsoft.Json;
 
 using NumSharp;
@@ -31,7 +31,7 @@ namespace fishing
 
 
         // first 3 entries are number of discrete values to be taken by each variable on a state
-        public NDArray nBuckets = np.array(new double[] { 20, 20, 20 });
+        public NDArray nBuckets = np.array(new double[] { 10, 20, 10 });
 
         // the AI can CLICK or NOT CLICK
         public int nActions = 2;
@@ -42,11 +42,25 @@ namespace fishing
 
 
         // Q-learning settings
-        private float LearningRate = 0.1F;
-        private float Discount = 0.95F;
+        private float LearningRate = 0.2F;
+        private float Discount = 0.90F;
         private int NumEpisodes = 25000;
 
         private Logger Log;
+
+        private int NumItersElapsed = 0;
+
+        private double[] RewardBuffer = new double[1000];
+
+        public double GetMeanReward()
+        {
+
+            double sum = 0;
+            Array.ForEach(RewardBuffer, delegate (double i) { sum += i; });
+
+            return sum / (double)(NumItersElapsed % 1000);
+
+        }
 
 
         public void ReadQTableFromJson()
@@ -129,24 +143,48 @@ namespace fishing
                                                           nActions });
 
 
-            
+            // let's make the default action , on average, be NOT CLICK
+            QTable[":,:,:,0"] = 0.03d;
+
+
+
             Log = log;
 
 
         }
 
 
-        public int Update(double[] OldState, double[] NewState)
+        public int Update(double[] OlderState, double[] OldState, double[] NewState)
         {
+
+
+            NumItersElapsed++;
 
             int BestAction;
 
             // DistanceFromCatch
             // the closer the agent is better the reward
             // this way we don't have many local minima
-            double reward = (double) Math.Pow(100,NewState[3]) ;
 
 
+            double reward = -1;
+
+
+            
+
+          
+            
+            reward = (double)Math.Pow(10, OldState[3]);
+
+
+            if (OldState[3] == 0)
+            {
+                reward = -10;
+            }
+
+            // update reward buffer
+            RewardBuffer[NumItersElapsed % 1000] = reward;
+           
 
             int[] DOldState = DiscretizeState(OldState);
             int[] DNewState = DiscretizeState(NewState);
@@ -179,17 +217,16 @@ namespace fishing
                 return 0;
             }
 
-            Log.Log($"New State: \n " +
-              $"{DNewState[0]} \n" +
-              $"{DNewState[1]} \n" +
-              $"{DNewState[2]} \n" +
-              $"Action1 {QTable[DOldState[0], DOldState[1], DOldState[2]][0] }\n" +
-              $"Action2 {QTable[DOldState[0], DOldState[1], DOldState[2]][1] }\n" +
-              $"Reward: {reward}\n"
-              );
 
 
+            Log.Log("-----------------------------------------------");
 
+            Log.Log($"Current State D: \n " +
+             $"{DOldState[0]} \n" +
+             $"{DOldState[1]} \n" +
+             $"{DOldState[2]} \n");
+
+            Log.Log($" Mean Reward : {GetMeanReward()} ");
 
             return BestAction;
         }

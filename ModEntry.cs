@@ -42,6 +42,8 @@ namespace fishing
         // from 0 to 1
         float distanceFromCatching = 0;
 
+        // store model's last state between updates
+        double[] StateBuffer = { 0, 0, 0 };
 
 
         /*********
@@ -115,6 +117,8 @@ namespace fishing
             helper.Events.Player.InventoryChanged += OnInventoryChanged;
             helper.Events.Display.MenuChanged += OnMenuChanged;
 
+
+
         }
 
 
@@ -136,13 +140,14 @@ namespace fishing
             if (args.NewMenu is BobberBar bar)
             {
 
-                // save model so far
-                this.Helper.Data.WriteJsonFile("RLmodel.json", Agent);
+               
 
                 log.Log("Dumping QTable");
                 Agent.DumpQTableJson();
 
                 CountFishes++;
+
+                log.Log($"Fish #{CountFishes}");
 
                 IsFishing = true;
 
@@ -191,11 +196,17 @@ namespace fishing
             // infinite stamina
             player.stamina = player.MaxStamina;
 
+
+
+
             if (player == null || !player.IsLocalPlayer)
                 return;
             if (!(Game1.player.CurrentTool is FishingRod))
                 return;
 
+
+
+           
 
 
             FishingRod rod = Game1.player.CurrentTool as FishingRod;
@@ -210,11 +221,16 @@ namespace fishing
                                  Game1.player);
             }
 
+
+            if (rod.isTimingCast)
+            {
+                rod.castingTimerSpeed = 0;
+                rod.castingPower = 1;
+            }
+
             if (!rod.isNibbling && rod.isFishing && !rod.isReeling && !rod.pullingOutOfWater && !rod.hit)
             {
                 rod.timeUntilFishingBite = 0;
-                rod.castingTimerSpeed = 0;
-                rod.castingPower = 1;
             }
 
             if (rod.isNibbling && rod.isFishing && !rod.isReeling && !rod.pullingOutOfWater && !rod.hit)
@@ -239,8 +255,8 @@ namespace fishing
 
          
 
-            // 2x per second
-            if (args.IsMultipleOf(30))
+            // 3x per second
+            if (args.IsMultipleOf(20))
             {
 
 
@@ -250,7 +266,14 @@ namespace fishing
 
                     int  best_action;
 
-                    double[] old_state = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+                    double[] OldState = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+
+                    // if is the first iteration StateBuffer don't have anything
+                    if (CountFishes == 0)
+                    {
+                        StateBuffer = OldState;
+                    }
+
 
                     // Update State
                     bobberBarPos = Helper.Reflection.GetField<float>(bar, "bobberBarPos").GetValue();
@@ -259,10 +282,10 @@ namespace fishing
                     distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
 
 
-                    double [] new_state = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+                    double [] NewState = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
 
 
-                    best_action = (int) Agent.Update(old_state,new_state);
+                    best_action = (int) Agent.Update(StateBuffer,OldState, NewState);
 
                     // execute action if needed
                     if(best_action == 1 )
@@ -274,6 +297,11 @@ namespace fishing
                         IsButtonDownHack.simulateDown = false;
 
                     }
+
+
+                    // store last state
+
+                    StateBuffer = OldState;
 
 
                 }
