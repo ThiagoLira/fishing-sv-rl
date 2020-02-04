@@ -80,6 +80,9 @@ namespace fishing
 
         public bool autoCastRod = true;
 
+        Random rnd = new Random();
+
+
         private RLAgent Agent;
 
         /// <summary>The mod entry point, called after the mod is first loaded.</summary>
@@ -88,6 +91,7 @@ namespace fishing
         {
 
 
+            
 
             modHelper.Init(helper, this.Monitor);
 
@@ -266,7 +270,9 @@ namespace fishing
 
                     int  best_action;
 
-                    double[] OldState = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+                    double diffBobberFish = bobberPosition - bobberBarPos;
+
+                    double[] OldState = new double[] { (double) diffBobberFish, (double)bobberBarSpeed, (double)distanceFromCatching };
 
                     // if is the first iteration StateBuffer don't have anything
                     if (CountFishes == 0)
@@ -282,13 +288,27 @@ namespace fishing
                     distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
 
 
-                    double [] NewState = new double[] { (double)bobberBarPos, (double)bobberBarSpeed, (double)bobberPosition, (double)distanceFromCatching };
+                    // State is (diffBobbberFish, BobberBarSpeed, DistanceFromCatching)
 
+                    diffBobberFish = bobberPosition - bobberBarPos;
+
+                    double [] NewState = new double[] { (double)diffBobberFish, (double)bobberBarSpeed, (double)distanceFromCatching };
+
+
+                    int rand = rnd.Next(100);
 
                     best_action = (int) Agent.Update(StateBuffer,OldState, NewState);
 
+                    if (rand < 10)
+                    {
+                        // explore random action and it's outcome 
+                        best_action = rnd.Next(1);
+                    }
+                    
+
+
                     // execute action if needed
-                    if(best_action == 1 )
+                    if (best_action == 1 )
                     {
                         IsButtonDownHack.simulateDown = true;
                     }
