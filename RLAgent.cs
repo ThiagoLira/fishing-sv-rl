@@ -16,14 +16,13 @@ namespace fishing
 
     {
 
-        // ALWAYS ON THIS ORDER
-        public const double bobberBarPosMax = 432;
+        public const double bobberBarPosMax = 432d;
         public const double bobberBarPosMin = 0;
 
         public const double bobberBarSpeedMax = 16.8;
         public const double bobberBarSpeedMin = -16.8;
 
-        public const double bobberPositionMax = 508.0000;
+        public const double bobberPositionMax = 526.001d;
         public const double bobberPositionMin = 0;
 
         public const double distVictoryMax = 1;
@@ -39,20 +38,20 @@ namespace fishing
 
 
         // first 3 entries are number of discrete values to be taken by each variable on a state
-        public NDArray nBuckets = np.array(new double[] { 20,20 });
+        public NDArray nBuckets = np.array(new double[] { 20,20,20 });
 
         // the AI can CLICK or NOT CLICK
         public int nActions = 2;
 
-        public NDArray DiscreteStep = new double[2];
+        public NDArray DiscreteStep = new double[3];
 
         public NDArray QTable;
 
 
         // Q-learning settings
-        private float LearningRate = 0.2F;
-        private float Discount = 0.90F;
-        private int NumEpisodes = 25000;
+        public float LearningRate = 0.6F;
+
+        public float Discount = 0.2F;
 
         private Logger Log;
 
@@ -77,7 +76,7 @@ namespace fishing
             {
                 string json = r.ReadToEnd();
 
-                double[,,] temp = JsonConvert.DeserializeObject<double[,,] >(json);
+                double[,,,] temp = JsonConvert.DeserializeObject<double[,,,] >(json);
 
 
 
@@ -87,6 +86,7 @@ namespace fishing
 
                     this.QTable.reshape(new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
                                                     1+ Convert.ToInt32((double) nBuckets[1]),
+                                                    1+ Convert.ToInt32((double) nBuckets[2]),
                                                     nActions });
 
                     Log.Log("Successfuly loaded QTable from json");
@@ -115,11 +115,27 @@ namespace fishing
         public int[] DiscretizeState(double[] state)
         {
 
-            int[] temp = new int[2];
+            int[] temp = new int[3];
 
 
-            temp[0] = (int)Math.Floor((double)((state[0] - diffBobberFishMin) / DiscreteStep[0]));
-            temp[1] = (int)Math.Floor((double)((state[1] - bobberBarSpeedMin) / DiscreteStep[1]));
+            if (state[0] > bobberBarPosMax)
+            {
+                Log.Log($"MAX BOBBERBARPOS {state[0]}");
+            }
+            if (state[1] > bobberPositionMax)
+            {
+                Log.Log($"MAX bobberPositionMax {state[1]}");
+
+            }
+            if (state[2] > bobberBarSpeedMax)
+            {
+                Log.Log($"MAX bobberBarSpeedMax {state[2]}");
+
+            }
+
+            temp[0] = (int)Math.Floor((double)((state[0] - bobberBarPosMin) / DiscreteStep[0]));
+            temp[1] = (int)Math.Floor((double)((state[1] - bobberPositionMin) / DiscreteStep[1]));
+            temp[2] = (int)Math.Floor((double)((state[2] - bobberBarSpeedMin) / DiscreteStep[2]));
 
 
             return temp;
@@ -136,15 +152,18 @@ namespace fishing
 
             // calculate the increment on each discretized feature 
             // this is then used to create "buckets" on the Q-table for each possible state
-            DiscreteStep[0] = (diffBobberFishMax - diffBobberFishMin) / nBuckets[0];
-            DiscreteStep[1] = (bobberBarSpeedMax - bobberBarSpeedMin) / nBuckets[1];
+            DiscreteStep[0] = (bobberBarPosMax - bobberBarPosMin) / nBuckets[0];
+            DiscreteStep[1] = (bobberPositionMax - bobberPositionMin) / nBuckets[1];
+            DiscreteStep[2] = (bobberBarSpeedMax - bobberBarSpeedMin) / nBuckets[2];
 
 
 
             // initialize Q-table
             // one more position since the last bucket is indexed by the arraysize instead of arraysize -1 
-            QTable = np.random.uniform(0, .05, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
+            // optimistic start 
+            QTable = np.random.uniform(4, 5, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
                                                           1+ Convert.ToInt32((double) nBuckets[1]),
+                                                          1+ Convert.ToInt32((double) nBuckets[2]),
                                                           nActions });
 
 
@@ -161,6 +180,9 @@ namespace fishing
 
             NumItersElapsed++;
 
+            
+
+
             int BestAction;
 
             // DistanceFromCatch
@@ -171,9 +193,8 @@ namespace fishing
             int[] DNewState = DiscretizeState(NewState);
 
             // simple difference of winning bar height
-            double reward = OldState[2] - OlderState[2];
+            double reward = OldState[3] - OlderState[3];
 
-  
             
             // update reward buffer
             RewardBuffer[NumItersElapsed % 10000] = reward;
@@ -184,20 +205,14 @@ namespace fishing
             try
             {
                 // array with q values for 2 possible actions
-                BestAction = np.argmax(QTable[DOldState[0], DOldState[1]]);
+                BestAction = np.argmax(QTable[DOldState[0], DOldState[1], DOldState[2]]);
 
                
 
-                QTable[DOldState[0], DOldState[1]][BestAction] = QTable[DOldState[0], DOldState[1]][BestAction] + 
-                                    LearningRate * ( reward + Discount * np.max(QTable[DNewState[0], DNewState[1]]) - QTable[DOldState[0], DOldState[1]][BestAction]);
+                QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] = QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] + 
+                                    LearningRate * ( reward + Discount * np.max(QTable[DNewState[0], DNewState[1], DNewState[2]]) - QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction]);
 
 
-                if (NewState[2] == 1d)
-                {
-                    // terminal state!
-                    QTable[DOldState[0], DOldState[1]][BestAction] = 0;
-                    Log.Log("Reached terminal state!");
-                }
 
             }
             catch (Exception e)
@@ -215,16 +230,18 @@ namespace fishing
             }
 
 
-
+            /*
             Log.Log("-----------------------------------------------");
 
             Log.Log($"Current State: \n " +
              $"{DOldState[0]} \n" +
-             $"{DOldState[1]} \n");
+             $"{DOldState[1]} \n" +
+             $"{DOldState[2]} \n");
             Log.Log($" Last reward : {reward}");
             Log.Log($" Mean Reward : {GetMeanReward()} ");
-
+            */
             return BestAction;
+
         }
 
 

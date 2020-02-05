@@ -43,7 +43,7 @@ namespace fishing
         float distanceFromCatching = 0;
 
         // store model's last state between updates
-        double[] StateBuffer = { 0, 0, 0 };
+        double[] StateBuffer = { 0, 0, 0 ,0};
 
 
         /*********
@@ -144,7 +144,28 @@ namespace fishing
             if (args.NewMenu is BobberBar bar)
             {
 
-               
+
+
+                // every 100 iterations increase discount i.e. future matters more than learning
+                if (CountFishes % 100 == 0)
+                {
+                    Agent.Discount += 0.1f;
+                    Agent.LearningRate -= 0.1f;
+
+                    if (Agent.Discount > 0.9)
+                    {
+                        Agent.Discount = 0.9f;
+                    }
+
+                    if (Agent.LearningRate < 0.1)
+                    {
+                        Agent.LearningRate = 0.1f;
+                    }
+
+                    log.Log($"LR = {Agent.LearningRate} D = {Agent.Discount}");
+                }
+
+
 
                 log.Log("Dumping QTable");
                 Agent.DumpQTableJson();
@@ -257,14 +278,17 @@ namespace fishing
 
             }
 
-         
 
-            // 3x per second
-            if (args.IsMultipleOf(20))
+
+            // 6x per second
+            
+
+            if (args.IsMultipleOf(10))
             {
 
+                IsButtonDownHack.simulateDown = false;
 
-                    if (Game1.activeClickableMenu is BobberBar bar)
+                if (Game1.activeClickableMenu is BobberBar bar)
                 {
 
 
@@ -272,7 +296,7 @@ namespace fishing
 
                     double diffBobberFish = bobberPosition - bobberBarPos;
 
-                    double[] OldState = new double[] { (double) diffBobberFish, (double)bobberBarSpeed, (double)distanceFromCatching };
+                    double[] OldState = new double[] { (double)bobberBarPos, (double)bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
 
                     // if is the first iteration StateBuffer don't have anything
                     if (CountFishes == 0)
@@ -288,21 +312,20 @@ namespace fishing
                     distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
 
 
-                    // State is (diffBobbberFish, BobberBarSpeed, DistanceFromCatching)
-
                     diffBobberFish = bobberPosition - bobberBarPos;
 
-                    double [] NewState = new double[] { (double)diffBobberFish, (double)bobberBarSpeed, (double)distanceFromCatching };
+                    double [] NewState = new double[] { (double)bobberBarPos, (double) bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
 
 
                     int rand = rnd.Next(100);
 
                     best_action = (int) Agent.Update(StateBuffer,OldState, NewState);
 
-                    if (rand < 10)
+                    if (rand < 5)
                     {
+                        rand = 0;
                         // explore random action and it's outcome 
-                        best_action = rnd.Next(1);
+                        //best_action = rnd.Next(1);
                     }
                     
 
@@ -314,7 +337,8 @@ namespace fishing
                     }
                     else
                     {
-                        IsButtonDownHack.simulateDown = false;
+                        // do NOTHING
+                        //IsButtonDownHack.simulateDown = false;
 
                     }
 
