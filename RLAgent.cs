@@ -6,12 +6,25 @@ using System.Collections;
 using Newtonsoft.Json;
 
 using NumSharp;
-
+using Accord.Neuro;
 
 namespace fishing
 
 
 {
+
+
+
+
+    class ReplayBuffer
+    {
+
+
+
+
+    }
+
+
     class RLAgent
 
     {
@@ -45,10 +58,26 @@ namespace fishing
 
         public NDArray DiscreteStep = new double[3];
 
-        public NDArray QTable;
+        
 
+        // ANN STUFF
 
-        // Q-learning settings
+        private double[][] StateRewardMemory;
+
+        private double test;
+
+        private double learningRate = 0.1;
+        private double sigmoidAlphaValue = 2.0;
+        private int neuronsInFirstLayer = 10;
+        private int iterations = 50;
+        private bool useRegularization;
+        private bool useNguyenWidrow;
+        private bool useSameWeights;
+
+        public ActivationNetwork ann;
+
+        // Q-learning STUFF
+
         public float LearningRate = 0.6F;
 
         public float Discount = 0.2F;
@@ -58,6 +87,9 @@ namespace fishing
         private int NumItersElapsed = 0;
 
         private double[] RewardBuffer = new double[10000];
+
+        public NDArray QTable;
+
 
         public double GetMeanReward()
         {
@@ -77,6 +109,8 @@ namespace fishing
                 string json = r.ReadToEnd();
 
                 double[,,,] temp = JsonConvert.DeserializeObject<double[,,,] >(json);
+
+
 
 
 
@@ -147,7 +181,7 @@ namespace fishing
         public RLAgent(Logger log)
         {
 
-
+            this.ann = new ActivationNetwork(new BipolarSigmoidFunction(sigmoidAlphaValue), 2, neuronsInFirstLayer, 1);
 
 
             // calculate the increment on each discretized feature 
@@ -161,7 +195,7 @@ namespace fishing
             // initialize Q-table
             // one more position since the last bucket is indexed by the arraysize instead of arraysize -1 
             // optimistic start 
-            QTable = np.random.uniform(4, 5, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
+            QTable = np.random.uniform(-5, -4.9, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
                                                           1+ Convert.ToInt32((double) nBuckets[1]),
                                                           1+ Convert.ToInt32((double) nBuckets[2]),
                                                           nActions });
@@ -169,6 +203,20 @@ namespace fishing
 
 
             Log = log;
+
+
+        }
+
+
+
+        public void SampleTransition(double[] OlderState, double[] OldState, double[] NewState)
+        {
+
+
+            double reward = NewState[3] - OldState[3];
+
+            double[] oldState = new double[] { OldState[0], OldState[1], OldState[2] };
+
 
 
         }
@@ -193,7 +241,7 @@ namespace fishing
             int[] DNewState = DiscretizeState(NewState);
 
             // simple difference of winning bar height
-            double reward = OldState[3] - OlderState[3];
+            double reward = NewState[3] - OldState[3];
 
             
             // update reward buffer

@@ -280,12 +280,12 @@ namespace fishing
 
 
 
-            // 6x per second
-            
 
-            if (args.IsMultipleOf(10))
+            // 6x per second
+            if (args.IsMultipleOf(5))
             {
 
+                // unclick before taking an action
                 IsButtonDownHack.simulateDown = false;
 
                 if (Game1.activeClickableMenu is BobberBar bar)
