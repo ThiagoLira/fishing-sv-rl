@@ -1,19 +1,17 @@
-﻿using DsStardewLib.SMAPI;
+﻿using System;
+using DsStardewLib.SMAPI;
 using DsStardewLib.Utils;
 using fishing.HarmonyHacks;
-using NumSharp;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Tools;
-using Newtonsoft.Json;
-using System;
 
 namespace fishing
 {
 
-    
+
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
@@ -43,7 +41,9 @@ namespace fishing
         float distanceFromCatching = 0;
 
         // store model's last state between updates
-        double[] StateBuffer = { 0, 0, 0 ,0};
+        double[] StateBuffer = { 0, 0, 0, 0 };
+
+        int tickCounter = 0;
 
 
         /*********
@@ -91,7 +91,7 @@ namespace fishing
         {
 
 
-            
+
 
             modHelper.Init(helper, this.Monitor);
 
@@ -101,14 +101,6 @@ namespace fishing
 
             Agent = new RLAgent(log);
 
-            try
-            {
-                Agent.ReadQTableFromJson();
-            }
-            catch (Exception e)
-            {
-                log.Log(e.Message);
-            }
 
             config = modHelper.Config;
 
@@ -146,30 +138,6 @@ namespace fishing
 
 
 
-                // every 100 iterations increase discount i.e. future matters more than learning
-                if (CountFishes % 100 == 0)
-                {
-                    Agent.Discount += 0.1f;
-                    Agent.LearningRate -= 0.1f;
-
-                    if (Agent.Discount > 0.9)
-                    {
-                        Agent.Discount = 0.9f;
-                    }
-
-                    if (Agent.LearningRate < 0.1)
-                    {
-                        Agent.LearningRate = 0.1f;
-                    }
-
-                    log.Log($"LR = {Agent.LearningRate} D = {Agent.Discount}");
-                }
-
-
-
-                log.Log("Dumping QTable");
-                Agent.DumpQTableJson();
-
                 CountFishes++;
 
                 log.Log($"Fish #{CountFishes}");
@@ -187,10 +155,10 @@ namespace fishing
             {
                 // JUST... JUST LEAVE ME BE
                 menu.exitThisMenu();
-                
+
             }
-           
-           
+
+
 
 
         }
@@ -231,7 +199,7 @@ namespace fishing
 
 
 
-           
+
 
 
             FishingRod rod = Game1.player.CurrentTool as FishingRod;
@@ -281,9 +249,11 @@ namespace fishing
 
 
 
-            // 6x per second
-            if (args.IsMultipleOf(5))
+            // 60x per second
+            if (args.IsMultipleOf(1))
             {
+
+                tickCounter++;
 
                 // unclick before taking an action
                 IsButtonDownHack.simulateDown = false;
@@ -292,7 +262,7 @@ namespace fishing
                 {
 
 
-                    int  best_action;
+                    int best_action;
 
                     double diffBobberFish = bobberPosition - bobberBarPos;
 
@@ -314,24 +284,25 @@ namespace fishing
 
                     diffBobberFish = bobberPosition - bobberBarPos;
 
-                    double [] NewState = new double[] { (double)bobberBarPos, (double) bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
+                    double[] NewState = new double[] { (double)bobberBarPos, (double)bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
 
 
-                    int rand = rnd.Next(100);
 
-                    best_action = (int) Agent.Update(StateBuffer,OldState, NewState);
+                    best_action = (int)Agent.SampleTransition(StateBuffer, OldState, NewState);
 
-                    if (rand < 5)
+                    if(tickCounter > 10000)
                     {
-                        rand = 0;
-                        // explore random action and it's outcome 
-                        //best_action = rnd.Next(1);
+                        Agent.TrainNetwork();
+                        tickCounter = 0;
+
+                        // backup ANN
+                        Agent.StoreNetwork();
+
                     }
-                    
 
 
                     // execute action if needed
-                    if (best_action == 1 )
+                    if (best_action == 1)
                     {
                         IsButtonDownHack.simulateDown = true;
                     }
@@ -352,7 +323,7 @@ namespace fishing
 
 
             }
-       
+
         }
 
 

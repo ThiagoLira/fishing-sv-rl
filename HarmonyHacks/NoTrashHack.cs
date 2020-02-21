@@ -1,11 +1,10 @@
-﻿using DsStardewLib.Config;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Emit;
+using DsStardewLib.Config;
 using DsStardewLib.Utils;
 using Harmony;
 using StardewValley;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Emit;
 
 namespace fishing.HarmonyHacks
 {

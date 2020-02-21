@@ -1,12 +1,13 @@
 ﻿using System;
-using System.IO;
-using DsStardewLib.Utils;
-
 using System.Collections;
-using Newtonsoft.Json;
-
-using NumSharp;
 using Accord.Neuro;
+using DsStardewLib.Utils;
+using Accord.Neuro.Learning;
+using Accord.Statistics.Analysis;
+using System.Linq;
+using Accord.Math;
+
+using System.IO;
 
 namespace fishing
 
@@ -46,130 +47,48 @@ namespace fishing
         public const double diffBobberFishMin = -432.0d;
 
 
-        // for discretization purposes
-        // https://pythonprogramming.net/q-learning-reinforcement-learning-python-tutorial/
+        public Logger log;
 
 
-        // first 3 entries are number of discrete values to be taken by each variable on a state
-        public NDArray nBuckets = np.array(new double[] { 20,20,20 });
+        // Q LEARNING PARAMETERS
 
-        // the AI can CLICK or NOT CLICK
-        public int nActions = 2;
-
-        public NDArray DiscreteStep = new double[3];
-
-        
+        private double discount =  0.9d;
 
         // ANN STUFF
 
-        private double[][] StateRewardMemory;
+        private ArrayList StateRewardMemory = new ArrayList();
 
-        private double test;
+
+        Random rnd = new Random();
 
         private double learningRate = 0.1;
         private double sigmoidAlphaValue = 2.0;
-        private int neuronsInFirstLayer = 10;
+
         private int iterations = 50;
         private bool useRegularization;
         private bool useNguyenWidrow;
         private bool useSameWeights;
 
+
+        private double epsilon = .5;
+
+
         public ActivationNetwork ann;
 
-        // Q-learning STUFF
-
-        public float LearningRate = 0.6F;
-
-        public float Discount = 0.2F;
-
-        private Logger Log;
-
-        private int NumItersElapsed = 0;
-
-        private double[] RewardBuffer = new double[10000];
-
-        public NDArray QTable;
+        private LevenbergMarquardtLearning teacher;
 
 
-        public double GetMeanReward()
+
+        // performs min-max normalization to ease learning rate
+        public double[] NormalizeState(double[] state)
         {
-
-            double sum = 0;
-            Array.ForEach(RewardBuffer, delegate (double i) { sum += i; });
-
-            return sum / (double)(Math.Min(NumItersElapsed, 10000));
-
-        }
-
-
-        public void ReadQTableFromJson()
-        {
-            using (StreamReader r = new StreamReader("QTable.json"))
-            {
-                string json = r.ReadToEnd();
-
-                double[,,,] temp = JsonConvert.DeserializeObject<double[,,,] >(json);
+            double[] temp = new double[3];
 
 
 
-
-
-                try
-                {
-                    this.QTable = NDArray.FromMultiDimArray<double>(temp);
-
-                    this.QTable.reshape(new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
-                                                    1+ Convert.ToInt32((double) nBuckets[1]),
-                                                    1+ Convert.ToInt32((double) nBuckets[2]),
-                                                    nActions });
-
-                    Log.Log("Successfuly loaded QTable from json");
-
-                }
-                catch (Exception e)
-                {
-                    Log.Log("WARNING Mismatch on QTable size stored on Json");
-                }
-
-            }
-
-
-        }
-        public void DumpQTableJson()
-        {
-            string json = JsonConvert.SerializeObject(this.QTable.ToMuliDimArray<double>());
-
-            System.IO.File.WriteAllText(@"QTable.json", json);
-
-
-        }
-
-
-
-        public int[] DiscretizeState(double[] state)
-        {
-
-            int[] temp = new int[3];
-
-
-            if (state[0] > bobberBarPosMax)
-            {
-                Log.Log($"MAX BOBBERBARPOS {state[0]}");
-            }
-            if (state[1] > bobberPositionMax)
-            {
-                Log.Log($"MAX bobberPositionMax {state[1]}");
-
-            }
-            if (state[2] > bobberBarSpeedMax)
-            {
-                Log.Log($"MAX bobberBarSpeedMax {state[2]}");
-
-            }
-
-            temp[0] = (int)Math.Floor((double)((state[0] - bobberBarPosMin) / DiscreteStep[0]));
-            temp[1] = (int)Math.Floor((double)((state[1] - bobberPositionMin) / DiscreteStep[1]));
-            temp[2] = (int)Math.Floor((double)((state[2] - bobberBarSpeedMin) / DiscreteStep[2]));
+            temp[0] = (state[0] - bobberBarPosMin) / (bobberBarPosMax - bobberBarPosMin);
+            temp[1] = (state[1] - bobberPositionMin) / (bobberPositionMax - bobberPositionMin);
+            temp[2] = (state[2] - bobberBarSpeedMin) / (bobberBarSpeedMax - bobberBarSpeedMin);
 
 
             return temp;
@@ -178,119 +97,172 @@ namespace fishing
         }
 
 
+
         public RLAgent(Logger log)
         {
 
-            this.ann = new ActivationNetwork(new BipolarSigmoidFunction(sigmoidAlphaValue), 2, neuronsInFirstLayer, 1);
-
-
-            // calculate the increment on each discretized feature 
-            // this is then used to create "buckets" on the Q-table for each possible state
-            DiscreteStep[0] = (bobberBarPosMax - bobberBarPosMin) / nBuckets[0];
-            DiscreteStep[1] = (bobberPositionMax - bobberPositionMin) / nBuckets[1];
-            DiscreteStep[2] = (bobberBarSpeedMax - bobberBarSpeedMin) / nBuckets[2];
-
-
-
-            // initialize Q-table
-            // one more position since the last bucket is indexed by the arraysize instead of arraysize -1 
-            // optimistic start 
-            QTable = np.random.uniform(-5, -4.9, new int[] { 1+ Convert.ToInt32((double) nBuckets[0]),
-                                                          1+ Convert.ToInt32((double) nBuckets[1]),
-                                                          1+ Convert.ToInt32((double) nBuckets[2]),
-                                                          nActions });
-
-
-
-            Log = log;
-
-
-        }
-
-
-
-        public void SampleTransition(double[] OlderState, double[] OldState, double[] NewState)
-        {
-
-
-            double reward = NewState[3] - OldState[3];
-
-            double[] oldState = new double[] { OldState[0], OldState[1], OldState[2] };
-
-
-
-        }
-
-
-        public int Update(double[] OlderState, double[] OldState, double[] NewState)
-        {
-
-
-            NumItersElapsed++;
-
-            
-
-
-            int BestAction;
-
-            // DistanceFromCatch
-            // the closer the agent is better the reward
-            // this way we don't have many local minima
-
-            int[] DOldState = DiscretizeState(OldState);
-            int[] DNewState = DiscretizeState(NewState);
-
-            // simple difference of winning bar height
-            double reward = NewState[3] - OldState[3];
-
-            
-            // update reward buffer
-            RewardBuffer[NumItersElapsed % 10000] = reward;
-           
-
+            this.ann = new ActivationNetwork(new BipolarSigmoidFunction(sigmoidAlphaValue),
+                                                                            // num inputs                            
+                                                                            3,
+                                                                            // dimensions layers
+                                                                            20, 20, 2);
 
 
             try
             {
-                // array with q values for 2 possible actions
-                BestAction = np.argmax(QTable[DOldState[0], DOldState[1], DOldState[2]]);
-
-               
-
-                QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] = QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction] + 
-                                    LearningRate * ( reward + Discount * np.max(QTable[DNewState[0], DNewState[1], DNewState[2]]) - QTable[DOldState[0], DOldState[1], DOldState[2]][BestAction]);
-
-
-
+                log.Log("Loading + NN.....");
+                ann = (ActivationNetwork)Network.Load("nn_backup");
             }
-            catch (Exception e)
+            catch (FileNotFoundException e)
             {
-                Log.Log($"Qtable shape: {QTable.shape[0]}");
-                Log.Log($"Qtable shape1: {QTable.shape[1]}");
-                Log.Log($"Qtable shape2: {QTable.shape[2]}");
-                Log.Log(e.Message);
-                Log.Log($"New State: \n " +
-                  $"{DOldState[0]} \n" +
-                  $"{DOldState[1]} \n" +
-                  $"{DOldState[2]} \n");
-
-                return 0;
+                log.Log("Creating new ANN, backup not found (or non existent)");
             }
 
+            teacher = new LevenbergMarquardtLearning(ann, useRegularization);
 
-            /*
-            Log.Log("-----------------------------------------------");
+            NguyenWidrow initializer = new NguyenWidrow(ann);
 
-            Log.Log($"Current State: \n " +
-             $"{DOldState[0]} \n" +
-             $"{DOldState[1]} \n" +
-             $"{DOldState[2]} \n");
-            Log.Log($" Last reward : {reward}");
-            Log.Log($" Mean Reward : {GetMeanReward()} ");
-            */
-            return BestAction;
+            initializer.Randomize();
+
+
+
+            this.log = log;
 
         }
+
+
+        public void StoreNetwork()
+        {
+            log.Log("Saving NN.....");
+            ann.Save("nn_backup");
+        }
+
+        public void TrainNetwork()
+        {
+
+            int NumTraining = 5000;
+
+
+            
+            double[,] inputs = new double[NumTraining,3];
+
+            double[,] outputs = new double[NumTraining, 2];
+
+            rnd = new Random();
+
+
+            var NumberSelected = 0;
+
+
+            
+            foreach (double[] mem in StateRewardMemory)
+            {
+
+                double prob = (double)NumTraining / ((double) NumTraining - (double) NumberSelected);
+
+                if (prob > rnd.NextDouble())
+                {
+                    inputs[NumberSelected, 0] = mem[0];
+                    inputs[NumberSelected, 1] = mem[1];
+                    inputs[NumberSelected, 2] = mem[2];
+
+
+                    // StateRewardMemory : { NormOldState[0], NormOldState[1], NormOldState[2], reward, NormNewState[0], NormNewState[1], NormNewState[2] } 
+
+                    double Reward = mem[3];
+
+                    double[] NextState = new double[] { mem[4], mem[5], mem[6] }; 
+
+                    // outputs are realizations from the frozen network
+                    // generate then now
+                    outputs[NumberSelected, 0] = Reward + discount*ann.Compute(NextState)[0];
+                    outputs[NumberSelected, 1] = Reward + discount*ann.Compute(NextState)[1]; 
+
+                    NumberSelected++;
+                }
+
+                // filled everything nicelly
+                if (NumberSelected > NumTraining - 1) { break; }
+
+            }
+
+
+
+
+
+
+            // TRAIN NETWORK
+
+            log.Log("Started a training phase!");
+
+            double error = Double.PositiveInfinity;
+            for (int i = 0; i < 10; i++)
+            {
+                log.Log($"Epoch {i}");
+                error = teacher.RunEpoch(inputs.ToJagged(), outputs.ToJagged());
+            }
+
+            // lets not overflow memory
+            StateRewardMemory = new ArrayList();
+
+            log.Log("Finished a training phase!");
+
+        }
+
+
+        public int SampleTransition(double[] OlderState, double[] OldState, double[] NewState)
+        {
+
+
+            double reward = NewState[3] - OldState[3];
+
+
+
+            // normalize newstate and oldstate
+
+            double[] NormOldState = NormalizeState(OldState);
+            double[] NormNewState = NormalizeState(NewState);
+
+
+            var action = 0;
+
+            // with some probability just use random action 
+            var num = rnd.NextDouble();
+
+            if (num > epsilon)
+            {
+                // 0 or 1
+                action = rnd.Next(2);
+
+            }
+            else
+            {
+                // sample action from network
+
+
+
+                double[] output = ann.Compute(NormOldState);
+
+                double MaxOut = output.Max();
+
+                // hacky way of doing an ArgMax
+                action = output.ToList().IndexOf(MaxOut);
+
+            }
+
+
+            // store tuple (s,a,r,s') on buffer to train NN after
+            StateRewardMemory.Add(new double[] { NormOldState[0], NormOldState[1], NormOldState[2], reward, NormNewState[0], NormNewState[1], NormNewState[2] });
+
+
+
+            return action;
+
+        }
+
+
+
+
 
 
     }
