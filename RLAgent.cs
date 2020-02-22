@@ -17,15 +17,6 @@ namespace fishing
 
 
 
-    class ReplayBuffer
-    {
-
-
-
-
-    }
-
-
     class RLAgent
 
     {
@@ -66,8 +57,6 @@ namespace fishing
 
         private int iterations = 50;
         private bool useRegularization;
-        private bool useNguyenWidrow;
-        private bool useSameWeights;
 
 
         private double epsilon = .5;
@@ -98,14 +87,15 @@ namespace fishing
 
 
 
+
         public RLAgent(Logger log)
         {
 
-            this.ann = new ActivationNetwork(new BipolarSigmoidFunction(sigmoidAlphaValue),
-                                                                            // num inputs                            
-                                                                            3,
-                                                                            // dimensions layers
-                                                                            20, 20, 2);
+            this.ann = new ActivationNetwork(new SigmoidFunction(sigmoidAlphaValue),
+                                                            // num inputs                            
+                                                            3,
+                                                            // dimensions layers
+                                                            30, 20, 2);
 
 
             try
@@ -196,11 +186,15 @@ namespace fishing
             log.Log("Started a training phase!");
 
             double error = Double.PositiveInfinity;
+            double total = 0;
             for (int i = 0; i < 10; i++)
             {
-                log.Log($"Epoch {i}");
                 error = teacher.RunEpoch(inputs.ToJagged(), outputs.ToJagged());
+                log.Log($"Epoch {i} error: {error}");
+                total += error;
             }
+
+            log.Log($"Traning phase mean error: {total/10}");
 
             // lets not overflow memory
             StateRewardMemory = new ArrayList();

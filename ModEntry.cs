@@ -250,7 +250,7 @@ namespace fishing
 
 
             // 60x per second
-            if (args.IsMultipleOf(1))
+            if (args.IsMultipleOf(5))
             {
 
                 tickCounter++;
@@ -290,7 +290,7 @@ namespace fishing
 
                     best_action = (int)Agent.SampleTransition(StateBuffer, OldState, NewState);
 
-                    if(tickCounter > 10000)
+                    if(tickCounter > 6000)
                     {
                         Agent.TrainNetwork();
                         tickCounter = 0;
