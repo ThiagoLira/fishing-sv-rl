@@ -43,6 +43,8 @@ namespace fishing
         // store model's last state between updates
         double[] StateBuffer = { 0, 0, 0, 0 };
 
+        int LastAction = 0;
+
         int tickCounter = 0;
 
 
@@ -250,7 +252,7 @@ namespace fishing
 
 
             // 60x per second
-            if (args.IsMultipleOf(5))
+            if (args.IsMultipleOf(1))
             {
 
                 tickCounter++;
@@ -262,17 +264,9 @@ namespace fishing
                 {
 
 
-                    int best_action;
-
-                    double diffBobberFish = bobberPosition - bobberBarPos;
+                   
 
                     double[] OldState = new double[] { (double)bobberBarPos, (double)bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
-
-                    // if is the first iteration StateBuffer don't have anything
-                    if (CountFishes == 0)
-                    {
-                        StateBuffer = OldState;
-                    }
 
 
                     // Update State
@@ -282,15 +276,13 @@ namespace fishing
                     distanceFromCatching = Helper.Reflection.GetField<float>(bar, "distanceFromCatching").GetValue();
 
 
-                    diffBobberFish = bobberPosition - bobberBarPos;
-
                     double[] NewState = new double[] { (double)bobberBarPos, (double)bobberPosition, (double)bobberBarSpeed, (double)distanceFromCatching };
 
 
 
-                    best_action = (int)Agent.SampleTransition(StateBuffer, OldState, NewState);
+                    int NewAction = (int)Agent.SampleTransition(LastAction ,OldState, NewState);
 
-                    if(tickCounter > 6000)
+                    if(tickCounter > 4000)
                     {
                         Agent.TrainNetwork();
                         tickCounter = 0;
@@ -302,7 +294,7 @@ namespace fishing
 
 
                     // execute action if needed
-                    if (best_action == 1)
+                    if (NewAction == 1)
                     {
                         IsButtonDownHack.simulateDown = true;
                     }
@@ -314,9 +306,8 @@ namespace fishing
                     }
 
 
-                    // store last state
 
-                    StateBuffer = OldState;
+                    LastAction = NewAction;
 
 
                 }

@@ -59,12 +59,12 @@ namespace fishing
         private bool useRegularization;
 
 
-        private double epsilon = .5;
+        private double epsilon = .9;
 
 
         public ActivationNetwork ann;
 
-        private LevenbergMarquardtLearning teacher;
+        private BackPropagationLearning teacher;
 
 
 
@@ -95,12 +95,14 @@ namespace fishing
                                                             // num inputs                            
                                                             3,
                                                             // dimensions layers
-                                                            30, 20, 2);
+                                                            50, 30,30,30, 2);
 
 
+            
+            
             try
             {
-                log.Log("Loading + NN.....");
+                log.Log("Loading NN from file");
                 ann = (ActivationNetwork)Network.Load("nn_backup");
             }
             catch (FileNotFoundException e)
@@ -108,13 +110,11 @@ namespace fishing
                 log.Log("Creating new ANN, backup not found (or non existent)");
             }
 
-            teacher = new LevenbergMarquardtLearning(ann, useRegularization);
+            teacher = new BackPropagationLearning(ann);
 
-            NguyenWidrow initializer = new NguyenWidrow(ann);
+            GaussianWeights initializer = new GaussianWeights(ann,0.1);
 
             initializer.Randomize();
-
-
 
             this.log = log;
 
@@ -130,7 +130,7 @@ namespace fishing
         public void TrainNetwork()
         {
 
-            int NumTraining = 5000;
+            int NumTraining = 2000;
 
 
             
@@ -143,8 +143,6 @@ namespace fishing
 
             var NumberSelected = 0;
 
-
-            
             foreach (double[] mem in StateRewardMemory)
             {
 
@@ -157,16 +155,33 @@ namespace fishing
                     inputs[NumberSelected, 2] = mem[2];
 
 
-                    // StateRewardMemory : { NormOldState[0], NormOldState[1], NormOldState[2], reward, NormNewState[0], NormNewState[1], NormNewState[2] } 
+                    // StateRewardMemory : { NormOldState[0], NormOldState[1], NormOldState[2], Action,  reward, NormNewState[0], NormNewState[1], NormNewState[2] } 
 
-                    double Reward = mem[3];
+                    int Action = (int) mem[3];
 
-                    double[] NextState = new double[] { mem[4], mem[5], mem[6] }; 
+                    int NotAction = 0;
 
+                    // the action NOT executed by the model from state OldState to state NewState
+                    if(Action == 0)
+                    {
+                        NotAction = 1;
+                    }
+
+                    double Reward = mem[4];
+
+
+                    double[] OldState = new double[] { mem[0], mem[1], mem[2] };
+                    double[] NextState = new double[] { mem[5], mem[6], mem[7] };
+                    
                     // outputs are realizations from the frozen network
                     // generate then now
-                    outputs[NumberSelected, 0] = Reward + discount*ann.Compute(NextState)[0];
-                    outputs[NumberSelected, 1] = Reward + discount*ann.Compute(NextState)[1]; 
+
+                    // update Q_state of ACTION
+                    // do nothing to Q_state of other action
+
+                    outputs[NumberSelected, Action] = Reward + discount*ann.Compute(NextState).Max();
+
+                    outputs[NumberSelected, NotAction] = ann.Compute(OldState)[NotAction]; 
 
                     NumberSelected++;
                 }
@@ -187,14 +202,14 @@ namespace fishing
 
             double error = Double.PositiveInfinity;
             double total = 0;
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 25; i++)
             {
                 error = teacher.RunEpoch(inputs.ToJagged(), outputs.ToJagged());
                 log.Log($"Epoch {i} error: {error}");
                 total += error;
             }
 
-            log.Log($"Traning phase mean error: {total/10}");
+            log.Log($"Traning phase mean error: {total/50}");
 
             // lets not overflow memory
             StateRewardMemory = new ArrayList();
@@ -204,7 +219,7 @@ namespace fishing
         }
 
 
-        public int SampleTransition(double[] OlderState, double[] OldState, double[] NewState)
+        public int SampleTransition( int LastAction, double[] OldState, double[] NewState)
         {
 
 
@@ -212,10 +227,27 @@ namespace fishing
 
 
 
+            
+
             // normalize newstate and oldstate
 
             double[] NormOldState = NormalizeState(OldState);
             double[] NormNewState = NormalizeState(NewState);
+
+
+
+
+
+            // lets try a simpler reward 
+
+            if (Math.Abs(NormNewState[0] - 0.5) < .05)
+            {
+                log.Log("MAX REWARD");
+                reward = 100;
+            }
+            else {
+                reward = 0;
+            }
 
 
             var action = 0;
@@ -235,18 +267,19 @@ namespace fishing
 
 
 
-                double[] output = ann.Compute(NormOldState);
+                double[] output = ann.Compute(NormNewState);
 
                 double MaxOut = output.Max();
 
                 // hacky way of doing an ArgMax
                 action = output.ToList().IndexOf(MaxOut);
 
+
             }
 
 
             // store tuple (s,a,r,s') on buffer to train NN after
-            StateRewardMemory.Add(new double[] { NormOldState[0], NormOldState[1], NormOldState[2], reward, NormNewState[0], NormNewState[1], NormNewState[2] });
+            StateRewardMemory.Add(new double[] { NormOldState[0], NormOldState[1], NormOldState[2], LastAction, reward, NormNewState[0], NormNewState[1], NormNewState[2] });
 
 
 
